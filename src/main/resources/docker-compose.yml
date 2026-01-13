@@ -1,0 +1,10 @@
+services:
+  api:
+    build: .
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker  <-- ¡Aquí activas el bloque YAML!
+      - DB_USER=usuario_real
+      - DB_PASSWORD=password_super_seguro
+      - AWS_BUCKET_NAME=bucket-local-simulado
+    depends_on:
+      - db
