@@ -1,0 +1,54 @@
+# --- CONFIGURACIÓN DEFAULT (Base para todos) ---
+spring:
+  application:
+    name: reportes-service
+  jpa:
+    open-in-view: false # Best practice: false
+
+# Mapeo de Variables de Entorno (Senior Pattern)
+# Sintaxis: ${NOMBRE_VAR_ENTORNO:valor_por_defecto}
+aws:
+  s3:
+    bucket: ${AWS_BUCKET_NAME:mi-bucket-dev-local}
+  region: ${AWS_REGION:us-east-1}
+
+---
+# --- PERFIL: DEV (Tu máquina local) ---
+spring:
+  config:
+    activate:
+      on-profile: dev
+  datasource:
+    url: jdbc:postgresql://localhost:5432/mi_base
+    username: postgres
+    password: password
+  jpa:
+    show-sql: true # En dev queremos ver qué pasa
+
+---
+# --- PERFIL: DOCKER (Para docker-compose) ---
+spring:
+  config:
+    activate:
+      on-profile: docker
+  datasource:
+    # "db" es el nombre del servicio en docker-compose
+    url: jdbc:postgresql://db:5432/mi_base_datos
+    username: ${DB_USER}     # Inyectado por Docker
+    password: ${DB_PASSWORD} # Inyectado por Docker
+
+---
+# --- PERFIL: PROD (AWS real) ---
+spring:
+  config:
+    activate:
+      on-profile: prod
+  datasource:
+    # En Prod nunca ponemos la URL hardcodeada, viene de Terraform/AWS
+    url: jdbc:postgresql://${RDS_ENDPOINT}:5432/${DB_NAME}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+  jpa:
+    show-sql: false # Por seguridad y performance
+    hibernate:
+      ddl-auto: validate # Nunca 'update' en producción
