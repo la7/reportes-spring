@@ -52,3 +52,8 @@ spring:
     show-sql: false # Por seguridad y performance
     hibernate:
       ddl-auto: validate # Nunca 'update' en producción
+
+app:
+  features:
+    simulacion-aws: true
+

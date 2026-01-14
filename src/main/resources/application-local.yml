@@ -1,0 +1,17 @@
+spring:
+  datasource:
+    # URL mágica: Crea una BD llamada 'testdb' en la memoria RAM
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    username: sa
+    password: sa
+    driver-class-name: org.h2.Driver
+
+  jpa:
+    # Le decimos a Hibernate que cree las tablas automáticamente al arrancar
+    hibernate:
+      ddl-auto: create-drop
+    # Importante: Le decimos que hable el "dialecto" de H2 pero simulando Postgres
+    database-platform: org.hibernate.dialect.H2Dialect
+
+    # Opcional: Para ver en consola que está haciendo el repositorio falso
+    show-sql: true
