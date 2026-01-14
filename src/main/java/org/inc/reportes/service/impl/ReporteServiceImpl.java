@@ -26,6 +26,10 @@ public class ReporteServiceImpl {
     @Value("${aws.s3.bucket}")
     private String bucketName;
 
+    // 1. Inyectamos la bandera del YAML
+    @Value("${app.features.simulacion-aws:false}")
+    private boolean modoSimulacion;
+
     // FASE 1: Síncrona (Rápida) - Crea el registro y devuelve ID
     public ReporteEntity iniciarReporte(Long usuarioId) {
         var reporte = ReporteEntity.builder()
@@ -44,9 +48,23 @@ public class ReporteServiceImpl {
         var reporte = repositorio.findById(reporteId).orElseThrow();
 
         try {
-            // 1. Cambiar estado a PROCESSING
+            // 0. Cambiar estado a PROCESSING
             reporte.setEstado(EstadoReporte.PROCESSING);
             repositorio.save(reporte);
+
+            // 1. Simulacion Test OK
+            if (modoSimulacion) {
+                log.warn(">>> MODO SIMULACIÓN ACTIVO: Saltando subida a S3 real <<<");
+
+                // Simulamos una pausa (latencia de red)
+                Thread.sleep(1000);
+
+                // Forzamos el OK sin tocar AWS
+                reporte.setS3Url("https://simulacion-bucket.s3.aws/fake.csv");
+                reporte.setEstado(EstadoReporte.COMPLETED);
+                repositorio.save(reporte);
+                return; // ¡Salimos del método aquí!
+            }
 
             // 2. Simular generación de CSV pesado (Lógica de Negocio)
             // En la vida real aquí harías queries complejas a la BD
