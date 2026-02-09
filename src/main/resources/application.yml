@@ -1,59 +1,149 @@
-# --- CONFIGURACIÓN DEFAULT (Base para todos) ---
+# ==============================================================
+# BLOQUE 1: CONFIGURACIÓN GLOBAL (Aplica a todos los ambientes)
+# ==============================================================
 spring:
   application:
-    name: reportes-service
-  jpa:
-    open-in-view: false # Best practice: false
+    name: reportes-backend
 
-# Mapeo de Variables de Entorno (Senior Pattern)
-# Sintaxis: ${NOMBRE_VAR_ENTORNO:valor_por_defecto}
+  # Formato de fechas ISO-8601 (Estándar JSON)
+  jackson:
+    date-format: com.fasterxml.jackson.databind.util.StdDateFormat
+    time-zone: UTC
+
+# Configuración de Actuator (Health Checks para AWS)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+# Logging base
+logging:
+  level:
+    root: INFO
+    com.tuempresa: DEBUG # Para ver tus logs propios
+    org.springframework.security: WARN
+
+# Valores por defecto para variables (Evita NullPointerExceptions)
 aws:
-  s3:
-    bucket: ${AWS_BUCKET_NAME:mi-bucket-dev-local}
   region: ${AWS_REGION:us-east-1}
+  s3:
+    bucket: ${AWS_BUCKET_NAME:bucket-no-configurado}
+
+# Feature Flags (Banderas de negocio)
+app:
+  features:
+    simulacion-aws: false # Por defecto, intentamos ir a AWS real
 
 ---
-# --- PERFIL: DEV (Tu máquina local) ---
+# ==============================================================
+# BLOQUE 2: PERFIL LOCAL (Tu Laptop - H2 en Memoria)
+# Actívalo con: -Dspring.profiles.active=local
+# ==============================================================
 spring:
   config:
     activate:
-      on-profile: dev
+      on-profile: local
+
   datasource:
-    url: jdbc:postgresql://localhost:5432/mi_base
-    username: postgres
-    password: password
+    # URL Mágica: H2 en modo compatibilidad Postgres
+    url: jdbc:h2:mem:reporte_db;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    username: sa
+    password: sa
+    driver-class-name: org.h2.Driver
+
   jpa:
-    show-sql: true # En dev queremos ver qué pasa
-
----
-# --- PERFIL: DOCKER (Para docker-compose) ---
-spring:
-  config:
-    activate:
-      on-profile: docker
-  datasource:
-    # "db" es el nombre del servicio en docker-compose
-    url: jdbc:postgresql://db:5432/mi_base_datos
-    username: ${DB_USER}     # Inyectado por Docker
-    password: ${DB_PASSWORD} # Inyectado por Docker
-
----
-# --- PERFIL: PROD (AWS real) ---
-spring:
-  config:
-    activate:
-      on-profile: prod
-  datasource:
-    # En Prod nunca ponemos la URL hardcodeada, viene de Terraform/AWS
-    url: jdbc:postgresql://${RDS_ENDPOINT}:5432/${DB_NAME}
-    username: ${DB_USER}
-    password: ${DB_PASSWORD}
-  jpa:
-    show-sql: false # Por seguridad y performance
+    database-platform: org.hibernate.dialect.H2Dialect
     hibernate:
-      ddl-auto: validate # Nunca 'update' en producción
+      ddl-auto: create-drop # Crea tablas al iniciar, borra al cerrar
+    show-sql: true
 
+    # [SOLUCIÓN ERROR] Espera a que Hibernate cree las tablas antes de correr data.sql
+    defer-datasource-initialization: true
+
+  # Habilitar consola web de H2 (http://localhost:8080/h2-console)
+  h2:
+    console:
+      enabled: true
+
+# En local, quizás quieras simular AWS para no gastar dinero
 app:
   features:
     simulacion-aws: true
 
+---
+# ==============================================================
+# PERFIL: DOCKER (Para correr con Docker Compose Local)
+# Actívalo con: SPRING_PROFILES_ACTIVE=docker en docker-compose.yml
+# ==============================================================
+spring:
+  config:
+    activate:
+      on-profile: docker
+
+  datasource:
+    # "db" es el nombre del servicio Postgres en tu docker-compose.yml
+    url: jdbc:postgresql://db:5432/reportes_db
+    username: ${DB_USER}     # Se inyecta desde docker-compose environment
+    password: ${DB_PASSWORD} # Se inyecta desde docker-compose environment
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      # En docker local sí permitimos update para que cree las tablas rápido
+      ddl-auto: update
+    show-sql: true
+
+# En Docker local, quizás quieras simular S3 o usar LocalStack
+app:
+  features:
+    simulacion-aws: true
+
+---
+# ==============================================================
+# PERFIL 3: PERFIL PROD (AWS Real - RDS Postgres)
+# Actívalo con: SPRING_PROFILES_ACTIVE=prod (Variable de Entorno)
+# ==============================================================
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+  datasource:
+    # Lee las variables inyectadas por Terraform / EC2
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT:5432}/reportes_db
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: validate # ¡CRÍTICO! Nunca 'update' en prod. Solo valida que existan las tablas.
+    show-sql: false # Por seguridad y performance
+
+# En PROD, la simulación SIEMPRE debe estar apagada
+app:
+  features:
+    simulacion-aws: false
+
+---
+# ==============================================================
+# PERFIL 4: PERFIL DUMMY (Sin Base de Datos)
+# Actívalo con: -Dspring.profiles.active=dummy
+# ==============================================================
+spring:
+  config:
+    activate:
+      on-profile: dummy
+  # Desactivar autoconfiguración de SQL para arranque instantáneo
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration
+
+app:
+  features:
+    simulacion-aws: true # Dummy siempre simula
